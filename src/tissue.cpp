@@ -150,13 +150,13 @@ double EpiCell::get_binding_prob() {
 string GridPoint::str() const {
   ostringstream oss;
   oss << "xyz " << coords.str() << ", epi " << (epicell ? epicell->str() : "none") << ", v "
-      << virions << ", c " << chemokine;
+      << virions << ", c " << inflammatory_signal;
   return oss.str();
 }
 
 bool GridPoint::is_active() {
   // it could be incubating but without anything else set
-  return ((epicell && epicell->is_active()) || virions > 0 || chemokine > 0 || tcell);
+  return ((epicell && epicell->is_active()) || virions > 0 || inflammatory_signal > 0 || tcell);
 }
 
 static int get_cube_block_dim(int64_t num_grid_points) {
@@ -379,7 +379,7 @@ SampleData Tissue::get_grid_point_sample_data(int64_t grid_i) {
                  sample.epicell_status = grid_point->epicell->status;
                }
                sample.virions = grid_point->virions;
-               sample.chemokine = grid_point->chemokine;
+               sample.inflammatory_signal = grid_point->inflammatory_signal;
                return sample;
              },
              grid_points, grid_i)
@@ -436,14 +436,15 @@ bool Tissue::set_initial_infection(int64_t grid_i) {
       .wait();
 }
 
-void Tissue::accumulate_chemokines(HASH_TABLE<int64_t, float> &chemokines_to_update,
-                                   IntermittentTimer &timer) {
+void Tissue::accumulate_inflammatory_signals(
+    HASH_TABLE<int64_t, float> &inflammatory_signals_to_update, IntermittentTimer &timer) {
   timer.start();
   // accumulate updates for each target rank
   HASH_TABLE<intrank_t, vector<pair<int64_t, float>>> target_rank_updates;
-  for (auto &[coords_1d, chemokines] : chemokines_to_update) {
+  for (auto &[coords_1d, inflammatory_signals] : inflammatory_signals_to_update) {
     progress();
-    target_rank_updates[get_rank_for_grid_point(coords_1d)].push_back({coords_1d, chemokines});
+    target_rank_updates[get_rank_for_grid_point(coords_1d)].push_back(
+        {coords_1d, inflammatory_signals});
   }
   future<> fut_chain = make_future<>();
   // dispatch all updates to each target rank in turn
@@ -453,12 +454,12 @@ void Tissue::accumulate_chemokines(HASH_TABLE<int64_t, float> &chemokines_to_upd
         target_rank,
         [](grid_points_t &grid_points, new_active_grid_points_t &new_active_grid_points,
            view<pair<int64_t, float>> update_vector) {
-          for (auto &[grid_i, chemokine] : update_vector) {
+          for (auto &[grid_i, inflammatory_signal] : update_vector) {
             GridPoint *grid_point = Tissue::get_local_grid_point(grid_points, grid_i);
             new_active_grid_points->insert({grid_point, true});
             // just accumulate the concentrations. We will adjust them to be the average
             // of all neighbors later
-            grid_point->nb_chemokine += chemokine;
+            grid_point->nb_inflammatory_signal += inflammatory_signal;
           }
         },
         grid_points, new_active_grid_points, make_view(update_vector));
@@ -498,12 +499,12 @@ void Tissue::accumulate_virions(HASH_TABLE<int64_t, float> &virions_to_update,
   timer.stop();
 }
 
-float Tissue::get_chemokine(int64_t grid_i) {
+float Tissue::get_inflammatory_signal(int64_t grid_i) {
   return rpc(
              get_rank_for_grid_point(grid_i),
              [](grid_points_t &grid_points, int64_t grid_i) {
                GridPoint *grid_point = Tissue::get_local_grid_point(grid_points, grid_i);
-               return grid_point->chemokine;
+               return grid_point->inflammatory_signal;
              },
              grid_points, grid_i)
       .wait();
@@ -524,7 +525,8 @@ bool Tissue::try_add_new_tissue_tcell(int64_t grid_i) {
                    GridPoint *grid_point = Tissue::get_local_grid_point(grid_points, grid_i);
                    // grid point is already occupied by a tcell, don't add
                    if (grid_point->tcell) return false;
-                   if (grid_point->chemokine < _options->min_chemokine) return false;
+                   if (grid_point->inflammatory_signal < _options->min_inflammatory_signal)
+                     return false;
                    new_active_grid_points->insert({grid_point, true});
                    string tcell_id = to_string(rank_me()) + "-" + to_string(*tcells_generated);
                    (*tcells_generated)++;

@@ -110,7 +110,7 @@ def main():
     virions_chart_view = create_chart_view('Average virions')
     epicells_view = create_render_view('epicells', xdim, ydim)
     epicells_chart_view = create_chart_view('epicells', log_scale=True, left_max_range=xdim * ydim)
-    tcells_view = create_render_view('chemokines and tcells', xdim, ydim)
+    tcells_view = create_render_view('inflammatory_signals and tcells', xdim, ydim)
     tcells_chart_view = create_chart_view('tcells', log_scale=True, left_max_range=xdim * ydim)
     
     pvs.AddCameraLink(virions_view, epicells_view, 'link1')
@@ -138,11 +138,11 @@ def main():
     display_chart(options.stats, epicells_chart_view, ['incb', 'expr', 'apop', 'dead'],
                   ['incb', 'incubating', 'expr', 'expressing', 'apop', 'apoptotic', 'dead', 'dead'], 'epicells', epicell_cols)
     
-    chemokine_color_func = pvs.GetColorTransferFunction('chemokine')
-    chemokine_color_func.RGBPoints = [0.0249, 0.0, 0.0, 0.0, 249.0, 1.0, 1.0, 1.0]
-    chemokine_color_func.UseLogScale = 0
-    chemokine_color_func.NanOpacity = 0.0
-    display_data('sample_chemokine_', options.data, tcells_view, 'chemokine', chemokine_color_func)
+    inflammatory_signal_color_func = pvs.GetColorTransferFunction('inflammatory_signal')
+    inflammatory_signal_color_func.RGBPoints = [0.0249, 0.0, 0.0, 0.0, 249.0, 1.0, 1.0, 1.0]
+    inflammatory_signal_color_func.UseLogScale = 0
+    inflammatory_signal_color_func.NanOpacity = 0.0
+    display_data('sample_inflammatory_signal_', options.data, tcells_view, 'inflammatory_signal', inflammatory_signal_color_func)
 
     tcells_color_func = pvs.GetColorTransferFunction('t-cell-tissue')
     tcells_color_func.InterpretValuesAsCategories = 1

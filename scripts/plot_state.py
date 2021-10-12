@@ -17,9 +17,9 @@ def plot_virus(filename, axes):
     axes.set_xticks([])
     axes.set_yticks([])
 
-def plot_chemokine(filename_ch, filename_tc, axes):
+def plot_inflammatory_signal(filename_ch, filename_tc, axes):
     mesh1 = pv.read(filename_ch)
-    data1 = np.reshape(mesh1["chemokine"], (mesh1.dimensions[0]-1, mesh1.dimensions[1]-1))
+    data1 = np.reshape(mesh1["inflammatory_signal"], (mesh1.dimensions[0]-1, mesh1.dimensions[1]-1))
     mesh2 = pv.read(filename_tc)
     data2 = np.reshape(mesh2["t-cell-tissue"], (mesh2.dimensions[0]-1, mesh2.dimensions[1]-1))
     x = []
@@ -50,11 +50,11 @@ def plot_epicells(filename, axes):
     axes.set_yticks([])
 
 
-def plot_3_panel(epifile, virusfile, chemokinefile, tcellfile, outputName):
+def plot_3_panel(epifile, virusfile, inflammatory_signalfile, tcellfile, outputName):
 	fig, axs = plt.subplots(1,3,figsize=(16,5))
 	plot_epicells(epifile, axs[0])
 	plot_virus(virusfile, axs[1])
-	plot_chemokine(chemokinefile, tcellfile, axs[2])
+	plot_inflammatory_signal(inflammatory_signalfile, tcellfile, axs[2])
 	plt.tight_layout()
 	plt.savefig("{}_3panel.png".format(outputName), dpi=300)
 
@@ -67,12 +67,12 @@ outputName = sys.argv[3]
 
 epifile = "{}/sample_epicell_{}.vtk".format(sample_directory, timestep)
 virusfile = "{}/sample_virus_{}.vtk".format(sample_directory, timestep)
-chemokinefile = "{}/sample_chemokine_{}.vtk".format(sample_directory, timestep)
+inflammatory_signalfile = "{}/sample_inflammatory_signal_{}.vtk".format(sample_directory, timestep)
 tcellfile = "{}/sample_tcelltissue_{}.vtk".format(sample_directory, timestep)
 
-plot_3_panel(epifile, virusfile, chemokinefile, tcellfile, outputName)
+plot_3_panel(epifile, virusfile, inflammatory_signalfile, tcellfile, outputName)
 
 
 # plot_epicells(epifile, outputName)
 # plot_virus(virusfile, outputName)
-# plot_chemokine(chemokinefile, tcellfile, outputName)
+# plot_inflammatory_signal(inflammatory_signalfile, tcellfile, outputName)

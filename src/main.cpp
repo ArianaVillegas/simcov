@@ -38,8 +38,8 @@ class SimStats {
   int64_t dead = 0;
   int64_t tcells_vasculature = 0;
   int64_t tcells_tissue = 0;
-  float chemokines = 0;
-  int64_t num_chemo_pts = 0;
+  float inflammatory_signals = 0;
+  int64_t num_inflammatory_signal_pts = 0;
   float virions = 0;
 
   void init() {
@@ -72,9 +72,10 @@ class SimStats {
     totals.push_back(reduce_one(tcells_vasculature, op_fast_add, 0).wait());
     totals.push_back(reduce_one(tcells_tissue, op_fast_add, 0).wait());
     vector<float> totals_d;
-    totals_d.push_back(reduce_one(chemokines, op_fast_add, 0).wait() / get_num_grid_points());
+    totals_d.push_back(reduce_one(inflammatory_signals, op_fast_add, 0).wait() /
+                       get_num_grid_points());
     totals_d.push_back(reduce_one(virions, op_fast_add, 0).wait());  // / get_num_grid_points());
-    auto all_chem_pts = reduce_one(num_chemo_pts, op_fast_add, 0).wait();
+    auto all_chem_pts = reduce_one(num_inflammatory_signal_pts, op_fast_add, 0).wait();
     totals_d.push_back(all_chem_pts + totals[0] + totals[1] + totals[2] + totals[3]);
     auto perc_infected =
         100.0 * (float)(totals[0] + totals[1] + totals[2] + totals[3]) / get_num_grid_points();
@@ -138,7 +139,8 @@ void seed_infection(Tissue &tissue, int time_step) {
       while (true) {
         GridCoords new_coords(coords_1d);
         if (tissue.set_initial_infection(coords_1d)) {
-          SLOG_VERBOSE("Time step ", time_step, ": SUCCESSFUL initial infection at ", new_coords.str() + " after ", num_tries, " tries\n");
+          SLOG_VERBOSE("Time step ", time_step, ": SUCCESSFUL initial infection at ",
+                       new_coords.str() + " after ", num_tries, " tries\n");
           break;
         }
         num_tries++;
@@ -204,7 +206,7 @@ void update_circulating_tcells(int time_step, Tissue &tissue, double extravasate
 }
 
 void update_tissue_tcell(int time_step, Tissue &tissue, GridPoint *grid_point, vector<int64_t> &nbs,
-                         HASH_TABLE<int64_t, float> &chemokines_cache) {
+                         HASH_TABLE<int64_t, float> &inflammatory_signals_cache) {
   update_tcell_timer.start();
   TCell *tcell = grid_point->tcell;
   if (tcell->moved) {
@@ -254,40 +256,40 @@ void update_tissue_tcell(int time_step, Tissue &tissue, GridPoint *grid_point, v
   }
   if (tcell->binding_period == -1) {
     DBG(time_step, " tcell ", tcell->id, " trying to move at ", grid_point->coords.str(), "\n");
-    // didn't bind - move on chemokine gradient or at random
+    // didn't bind - move on inflammatory_signal gradient or at random
     int64_t selected_grid_i = nbs[_rnd_gen->get(0, (int64_t)nbs.size())];
-    // not bound - follow chemokine gradient
-    float highest_chemokine = 0;
+    // not bound - follow inflammatory_signal gradient
+    float highest_inflammatory_signal = 0;
     if (_options->tcells_follow_gradient) {
       // get a randomly shuffled list of neighbors so the tcell doesn't always tend to move in the
-      // same direction when there is a chemokine gradient
+      // same direction when there is a inflammatory_signal gradient
       auto rnd_nbs = nbs;
       random_shuffle(rnd_nbs.begin(), rnd_nbs.end());
       for (auto nb_grid_i : rnd_nbs) {
-        float chemokine = 0;
-        auto it = chemokines_cache.find(nb_grid_i);
-        if (it == chemokines_cache.end()) {
-          chemokine = tissue.get_chemokine(nb_grid_i);
-          chemokines_cache.insert({nb_grid_i, chemokine});
+        float inflammatory_signal = 0;
+        auto it = inflammatory_signals_cache.find(nb_grid_i);
+        if (it == inflammatory_signals_cache.end()) {
+          inflammatory_signal = tissue.get_inflammatory_signal(nb_grid_i);
+          inflammatory_signals_cache.insert({nb_grid_i, inflammatory_signal});
         } else {
-          chemokine = it->second;
+          inflammatory_signal = it->second;
         }
-        if (chemokine > highest_chemokine) {
-          highest_chemokine = chemokine;
+        if (inflammatory_signal > highest_inflammatory_signal) {
+          highest_inflammatory_signal = inflammatory_signal;
           selected_grid_i = nb_grid_i;
         }
-        DBG(time_step, " tcell ", tcell->id, " found nb chemokine ", chemokine, " at ",
-            GridCoords(selected_grid_i).str(), "\n");
+        DBG(time_step, " tcell ", tcell->id, " found nb inflammatory_signal ", inflammatory_signal,
+            " at ", GridCoords(selected_grid_i).str(), "\n");
       }
     }
-    if (highest_chemokine == 0) {
-      // no chemokines found - move randomly
+    if (highest_inflammatory_signal == 0) {
+      // no inflammatory_signals found - move randomly
       auto rnd_nb_i = _rnd_gen->get(0, (int64_t)nbs.size());
       selected_grid_i = nbs[rnd_nb_i];
       DBG(time_step, " tcell ", tcell->id, " try random move to ",
           GridCoords(selected_grid_i).str(), "\n");
     } else {
-      DBG(time_step, " tcell ", tcell->id, " - highest chemokine at ",
+      DBG(time_step, " tcell ", tcell->id, " - highest inflammatory_signal at ",
           GridCoords(selected_grid_i).str(), "\n");
     }
     // try a few times to find an open spot
@@ -353,26 +355,28 @@ void update_epicell(int time_step, Tissue &tissue, GridPoint *grid_point) {
   }
   if (produce_virions) {
     grid_point->virions += _options->virion_production;
-    grid_point->chemokine = min(grid_point->chemokine + _options->chemokine_production, 1.0);
+    grid_point->inflammatory_signal =
+        min(grid_point->inflammatory_signal + _options->inflammatory_signal_production, 1.0);
   }
   update_epicell_timer.stop();
 }
 
-void update_chemokines(GridPoint *grid_point, vector<int64_t> &nbs,
-                       HASH_TABLE<int64_t, float> &chemokines_to_update) {
+void update_inflammatory_signals(GridPoint *grid_point, vector<int64_t> &nbs,
+                                 HASH_TABLE<int64_t, float> &inflammatory_signals_to_update) {
   update_concentration_timer.start();
   // Concentrations diffuse, i.e. the concentration at any single grid point tends to the average
   // of all the neighbors. So here we tell each neighbor what the current concentration is and
   // later those neighbors will compute their own averages. We do it in this "push" manner because
   // then we don't need to check the neighbors from every single grid point, but just push from
   // ones with concentrations > 0 (i.e. active grid points)
-  if (grid_point->chemokine > 0) {
-    grid_point->chemokine *= (1.0 - _options->chemokine_decay_rate);
-    if (grid_point->chemokine < _options->min_chemokine) grid_point->chemokine = 0;
+  if (grid_point->inflammatory_signal > 0) {
+    grid_point->inflammatory_signal *= (1.0 - _options->inflammatory_signal_decay_rate);
+    if (grid_point->inflammatory_signal < _options->min_inflammatory_signal)
+      grid_point->inflammatory_signal = 0;
   }
-  if (grid_point->chemokine > 0) {
+  if (grid_point->inflammatory_signal > 0) {
     for (auto &nb_grid_i : nbs) {
-      chemokines_to_update[nb_grid_i] += grid_point->chemokine;
+      inflammatory_signals_to_update[nb_grid_i] += grid_point->inflammatory_signal;
     }
   }
   update_concentration_timer.stop();
@@ -418,21 +422,22 @@ void set_active_grid_points(Tissue &tissue) {
   for (auto grid_point = tissue.get_first_active_grid_point(); grid_point;
        grid_point = tissue.get_next_active_grid_point()) {
     auto nbs = tissue.get_neighbors(grid_point->coords);
-    diffuse(grid_point->chemokine, grid_point->nb_chemokine, _options->chemokine_diffusion_coef,
-            nbs->size());
+    diffuse(grid_point->inflammatory_signal, grid_point->nb_inflammatory_signal,
+            _options->inflammatory_signal_diffusion_coef, nbs->size());
     spread_virions(grid_point->virions, grid_point->nb_virions, _options->virion_diffusion_coef,
                    nbs->size());
-    if (grid_point->chemokine < _options->min_chemokine) grid_point->chemokine = 0;
-    // only count up chemokine in healthy epicells or empty spaces
+    if (grid_point->inflammatory_signal < _options->min_inflammatory_signal)
+      grid_point->inflammatory_signal = 0;
+    // only count up inflammatory_signal in healthy epicells or empty spaces
     // this will be added to the total number of infected and dead epicells to get cumulative
-    // chemokine spread
-    if (grid_point->chemokine > 0 &&
+    // inflammatory_signal spread
+    if (grid_point->inflammatory_signal > 0 &&
         (!grid_point->epicell || grid_point->epicell->status == EpiCellStatus::HEALTHY))
-      _sim_stats.num_chemo_pts++;
+      _sim_stats.num_inflammatory_signal_pts++;
     if (grid_point->virions > MAX_VIRIONS) grid_point->virions = MAX_VIRIONS;
     if (grid_point->virions < MIN_VIRIONS) grid_point->virions = 0;
     if (grid_point->tcell) grid_point->tcell->moved = false;
-    _sim_stats.chemokines += grid_point->chemokine;
+    _sim_stats.inflammatory_signals += grid_point->inflammatory_signal;
     _sim_stats.virions += grid_point->virions;
     if (!grid_point->is_active()) to_erase.push_back(grid_point);
   }
@@ -470,7 +475,7 @@ void sample(int time_step, vector<SampleData> &samples, int64_t start_id, ViewOb
     case ViewObject::VIRUS: header_oss << "virus"; break;
     case ViewObject::TCELL_TISSUE: header_oss << "t-cell-tissue"; break;
     case ViewObject::EPICELL: header_oss << "epicell"; break;
-    case ViewObject::CHEMOKINE: header_oss << "chemokine"; break;
+    case ViewObject::INFLAMMATORY_SIGNAL: header_oss << "inflammatory_signal"; break;
     default: SDIE("unknown view object");
   }
   header_oss << " unsigned_char\n"
@@ -496,13 +501,13 @@ void sample(int time_step, vector<SampleData> &samples, int64_t start_id, ViewOb
   }
   // each rank writes one portion of the dataset to the file
   unsigned char *buf = new unsigned char[samples.size()];
-  double chemo_scale = 255.0 / log(1.0 / _options->min_chemokine);
+  double inflammatory_signal_scale = 255.0 / log(1.0 / _options->min_inflammatory_signal);
   double virion_scale = 255.0 / log(MAX_VIRIONS);
   // DBG(time_step, " writing data from ", start_id, " to ", start_id + samples.size(), "\n");
   for (int64_t i = 0; i < samples.size(); i++) {
     auto &sample = samples[i];
     unsigned char val = 0;
-    double scaled_chemo = 0;
+    double scaled_inflammatory_signal = 0;
     switch (view_object) {
       case ViewObject::TCELL_TISSUE:
         assert(sample.tcells >= 0);
@@ -523,13 +528,13 @@ void sample(int time_step, vector<SampleData> &samples, int64_t start_id, ViewOb
         if (sample.virions > 1) val = virion_scale * log(sample.virions);
         if (sample.virions > 0 && val == 0) val = 1;
         break;
-      case ViewObject::CHEMOKINE:
-        assert(sample.chemokine >= 0 && sample.chemokine <= 1);
-        // set chemokine to 0 to ensure we can see the tcells
+      case ViewObject::INFLAMMATORY_SIGNAL:
+        assert(sample.inflammatory_signal >= 0 && sample.inflammatory_signal <= 1);
+        // set inflammatory_signal to 0 to ensure we can see the tcells
         if (sample.tcells > 0) break;
-        scaled_chemo = sample.chemokine / _options->min_chemokine;
-        if (scaled_chemo > 1) val = chemo_scale * log(scaled_chemo);
-        if (sample.chemokine > 0 && val == 0) val = 1;
+        scaled_inflammatory_signal = sample.inflammatory_signal / _options->min_inflammatory_signal;
+        if (scaled_inflammatory_signal > 1) val = inflammatory_signal_scale * log(scaled_inflammatory_signal);
+        if (sample.inflammatory_signal > 0 && val == 0) val = 1;
         break;
     }
     buf[i] = val;
@@ -571,7 +576,7 @@ int64_t get_samples(Tissue &tissue, vector<SampleData> &samples) {
             progress();
 #ifdef AVERAGE_SUBSAMPLE
             float virions = 0;
-            float chemokine = 0;
+            float inflammatory_signal = 0;
             int num_tcells = 0;
             bool epicell_found = false;
             array<int, 5> epicell_counts{0};
@@ -596,7 +601,7 @@ int64_t get_samples(Tissue &tissue, vector<SampleData> &samples) {
                       case EpiCellStatus::DEAD: epicell_counts[4]++; break;
                     }
                   }
-                  chemokine += sub_sd.chemokine;
+                  inflammatory_signal += sub_sd.inflammatory_signal;
                   virions += sub_sd.virions;
                 }
               }
@@ -623,7 +628,7 @@ int64_t get_samples(Tissue &tissue, vector<SampleData> &samples) {
                              .has_epicell = epicell_found,
                              .epicell_status = epi_status,
                              .virions = virions / block_size,
-                             .chemokine = chemokine / block_size};
+                             .inflammatory_signal = inflammatory_signal / block_size};
 #else
             auto sd = tissue.get_grid_point_sample_data(GridCoords::to_1d(x, y, z));
 #endif
@@ -661,9 +666,9 @@ void run_sim(Tissue &tissue) {
   SLOG("# datetime                    step    ", _sim_stats.header(STATS_COL_WIDTH),
        "<%active  lbln>\n");
   // store the total concentration increment updates for target grid points
-  // chemokine, virions
-  HASH_TABLE<int64_t, float> chemokines_to_update;
-  HASH_TABLE<int64_t, float> chemokines_cache;
+  // inflammatory_signal, virions
+  HASH_TABLE<int64_t, float> inflammatory_signals_to_update;
+  HASH_TABLE<int64_t, float> inflammatory_signals_cache;
   HASH_TABLE<int64_t, float> virions_to_update;
   bool warned_boundary = false;
   vector<SampleData> samples;
@@ -673,9 +678,9 @@ void run_sim(Tissue &tissue) {
     barrier();
     if (time_step == _options->antibody_period)
       _options->virion_clearance_rate *= _options->antibody_factor;
-    chemokines_to_update.clear();
+    inflammatory_signals_to_update.clear();
     virions_to_update.clear();
-    chemokines_cache.clear();
+    inflammatory_signals_cache.clear();
     if (time_step > _options->tcell_initial_delay) {
       generate_tcells(tissue, time_step);
       barrier();
@@ -685,9 +690,10 @@ void run_sim(Tissue &tissue) {
     // iterate through all active local grid points and update
     for (auto grid_point = tissue.get_first_active_grid_point(); grid_point;
          grid_point = tissue.get_next_active_grid_point()) {
-      if (grid_point->chemokine > 0)
-        DBG("chemokine\t", time_step, "\t", grid_point->coords.x, "\t", grid_point->coords.y, "\t",
-            grid_point->coords.z, "\t", grid_point->chemokine, "\n");
+      if (grid_point->inflammatory_signal > 0)
+        DBG("inflammatory_signal\t", time_step, "\t", grid_point->coords.x, "\t",
+            grid_point->coords.y, "\t", grid_point->coords.z, "\t", grid_point->inflammatory_signal,
+            "\n");
       if (grid_point->virions > 0)
         DBG("virions\t", time_step, "\t", grid_point->coords.x, "\t", grid_point->coords.y, "\t",
             grid_point->coords.z, "\t", grid_point->virions, "\n");
@@ -698,7 +704,8 @@ void run_sim(Tissue &tissue) {
             (_grid_size->z > 1 &&
              (!grid_point->coords.z || grid_point->coords.z == _grid_size->z - 1))) {
           WARN("Hit boundary at ", grid_point->coords.str(), " ", grid_point->epicell->str(),
-               " virions ", grid_point->virions, " chemokine ", grid_point->chemokine);
+               " virions ", grid_point->virions, " inflammatory_signal ",
+               grid_point->inflammatory_signal);
           warned_boundary = true;
         }
       }
@@ -708,15 +715,16 @@ void run_sim(Tissue &tissue) {
       // the tcells are moved (added to the new list, but only cleared out at the end of all
       // updates)
       if (grid_point->tcell)
-        update_tissue_tcell(time_step, tissue, grid_point, *nbs, chemokines_cache);
+        update_tissue_tcell(time_step, tissue, grid_point, *nbs, inflammatory_signals_cache);
       if (grid_point->epicell) update_epicell(time_step, tissue, grid_point);
-      update_chemokines(grid_point, *nbs, chemokines_to_update);
+      update_inflammatory_signals(grid_point, *nbs, inflammatory_signals_to_update);
       update_virions(grid_point, *nbs, virions_to_update);
       if (grid_point->is_active()) tissue.set_active(grid_point);
     }
     barrier();
     compute_updates_timer.stop();
-    tissue.accumulate_chemokines(chemokines_to_update, accumulate_concentrations_timer);
+    tissue.accumulate_inflammatory_signals(inflammatory_signals_to_update,
+                                           accumulate_concentrations_timer);
     tissue.accumulate_virions(virions_to_update, accumulate_concentrations_timer);
     barrier();
     if (time_step % five_perc == 0 || time_step == _options->num_timesteps - 1) {
@@ -735,8 +743,8 @@ void run_sim(Tissue &tissue) {
     barrier();
 
     _sim_stats.virions = 0;
-    _sim_stats.chemokines = 0;
-    _sim_stats.num_chemo_pts = 0;
+    _sim_stats.inflammatory_signals = 0;
+    _sim_stats.num_inflammatory_signal_pts = 0;
     set_active_grid_points(tissue);
     barrier();
 
@@ -748,7 +756,7 @@ void run_sim(Tissue &tissue) {
       sample(time_step, samples, start_id, ViewObject::EPICELL);
       sample(time_step, samples, start_id, ViewObject::TCELL_TISSUE);
       sample(time_step, samples, start_id, ViewObject::VIRUS);
-      sample(time_step, samples, start_id, ViewObject::CHEMOKINE);
+      sample(time_step, samples, start_id, ViewObject::INFLAMMATORY_SIGNAL);
       sample_timer.stop();
     }
 

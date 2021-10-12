@@ -26,10 +26,10 @@ def plot_virus_single(filename, output):
     colorbar.set_label("Virion Count",labelpad=-30)
     plt.savefig(output)
     
-def plot_chemokine_single(filename_ch, filename_tc, output):
+def plot_inflammatory_signal_single(filename_ch, filename_tc, output):
     plt.figure(figsize=(10,10), dpi=300)
     mesh1 = pv.read(filename_ch)
-    data1 = np.reshape(mesh1["chemokine"], (mesh1.dimensions[0]-1, mesh1.dimensions[1]-1))
+    data1 = np.reshape(mesh1["inflammatory_signal"], (mesh1.dimensions[0]-1, mesh1.dimensions[1]-1))
     mesh2 = pv.read(filename_tc)
     data2 = np.reshape(mesh2["t-cell-tissue"], (mesh2.dimensions[0]-1, mesh2.dimensions[1]-1))
     x = []
@@ -70,8 +70,8 @@ parser = argparse.ArgumentParser()
 parser.add_argument("--plot",
     metavar="P",
     type=str,
-    help="What plot to generate? [epicell, virus, chemokine]",
-    choices=["epicell", "virus", "chemokine"],
+    help="What plot to generate? [epicell, virus, inflammatory_signal]",
+    choices=["epicell", "virus", "inflammatory_signal"],
     required=True)
 parser.add_argument("--input",
     metavar="I",
@@ -86,7 +86,7 @@ parser.add_argument("--output",
 parser.add_argument("--input_tc",
     metavar="IT",
     type=str,
-    help="Input T-Cell VTK if plotting chemokine plot")
+    help="Input T-Cell VTK if plotting inflammatory_signal plot")
 
 args = parser.parse_args()
 plottype = args.plot
@@ -98,5 +98,5 @@ if plottype == "epicell":
     plot_epicells_single(inputfile, outputfile)
 elif plottype == "virus":
     plot_virus_single(inputfile, outputfile)
-elif plottype == "chemokine":
-    plot_chemokine_single(inputfile, input_tc, outputfile)
+elif plottype == "inflammatory_signal":
+    plot_inflammatory_signal_single(inputfile, input_tc, outputfile)

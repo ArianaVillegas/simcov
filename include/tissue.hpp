@@ -31,14 +31,14 @@ using std::shared_ptr;
 using std::to_string;
 using std::vector;
 
-enum class ViewObject { VIRUS, TCELL_TISSUE, EPICELL, CHEMOKINE };
+enum class ViewObject { VIRUS, TCELL_TISSUE, EPICELL, INFLAMMATORY_SIGNAL };
 
 inline string view_object_str(ViewObject view_object) {
   switch (view_object) {
     case ViewObject::TCELL_TISSUE: return "tcelltissue";
     case ViewObject::VIRUS: return "virus";
     case ViewObject::EPICELL: return "epicell";
-    case ViewObject::CHEMOKINE: return "chemokine";
+    case ViewObject::INFLAMMATORY_SIGNAL: return "inflammatory_signal";
     default: DIE("Unknown view object");
   }
   return "";
@@ -140,7 +140,7 @@ struct GridPoint {
   TCell *tcell = nullptr;
   // starts off empty and if calculated because this grid point becomes active, it is saved
   vector<int64_t> *neighbors = nullptr;
-  float chemokine = 0, nb_chemokine = 0;
+  float inflammatory_signal = 0, nb_inflammatory_signal = 0;
   float virions = 0, nb_virions = 0;
 
   string str() const;
@@ -153,7 +153,7 @@ struct SampleData {
   bool has_epicell = false;
   EpiCellStatus epicell_status = EpiCellStatus::HEALTHY;
   float virions = 0;
-  float chemokine = 0;
+  float inflammatory_signal = 0;
 };
 
 inline int64_t get_num_grid_points() {
@@ -196,12 +196,12 @@ class Tissue {
 
   bool set_initial_infection(int64_t grid_i);
 
-  void accumulate_chemokines(HASH_TABLE<int64_t, float> &chemokines_to_update,
-                             IntermittentTimer &timer);
+  void accumulate_inflammatory_signals(HASH_TABLE<int64_t, float> &inflammatory_signals_to_update,
+                                       IntermittentTimer &timer);
 
   void accumulate_virions(HASH_TABLE<int64_t, float> &virions_to_update, IntermittentTimer &timer);
 
-  float get_chemokine(int64_t grid_i);
+  float get_inflammatory_signal(int64_t grid_i);
 
   bool tcells_in_neighborhood(GridPoint *grid_point);
 

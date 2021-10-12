@@ -263,10 +263,10 @@ class Options {
   double virion_clearance_rate = 0.002;
   double virion_diffusion_coef = 1.0;
 
-  double chemokine_production = 1.0;
-  double chemokine_decay_rate = 0.01;
-  double chemokine_diffusion_coef = 1.0;
-  double min_chemokine = 1e-6;
+  double inflammatory_signal_production = 1.0;
+  double inflammatory_signal_decay_rate = 0.01;
+  double inflammatory_signal_diffusion_coef = 1.0;
+  double min_inflammatory_signal = 1e-6;
 
   double antibody_factor = 1;
   int antibody_period = 5760;
@@ -336,21 +336,21 @@ class Options {
                    "Fraction of virions that diffuse into all neighbors each time step")
         ->check(CLI::Range(0.0, 1.0))
         ->capture_default_str();
-    app.add_option("--chemokine-production", chemokine_production,
-                   "Amount of chemokine produced by expressing cells each time step")
+    app.add_option("--inflammatory-signal-production", inflammatory_signal_production,
+                   "Amount of inflammatory signal produced by expressing cells each time step")
         ->check(CLI::Range(0.0, 1.0))
         ->capture_default_str();
-    app.add_option("--chemokine-decay", chemokine_decay_rate,
-                   "Amount by which chemokine concentration drops each time step")
+    app.add_option("--inflammatory-signal-decay", inflammatory_signal_decay_rate,
+                   "Amount by which inflammatory signal concentration drops each time step")
         ->check(CLI::Range(0.0, 1.0))
         ->capture_default_str();
-    app.add_option("--chemokine-diffusion", chemokine_diffusion_coef,
-                   "Fraction of chemokine concentration that diffuses into all neighbors "
+    app.add_option("--inflammatory-signal-diffusion", inflammatory_signal_diffusion_coef,
+                   "Fraction of inflammatory signal concentration that diffuses into all neighbors "
                    "each time step")
         ->check(CLI::Range(0.0, 1.0))
         ->capture_default_str();
-    app.add_option("--min-chemokine", min_chemokine,
-                   "Minimum chemokine concentration that triggers a T cell")
+    app.add_option("--min-inflammatory-signal", min_inflammatory_signal,
+                   "Minimum inflammatory signal concentration that triggers a T cell")
         ->check(CLI::Range(0.0, 1.0))
         ->capture_default_str();
     app.add_option("--antibody-factor", antibody_factor,
@@ -379,7 +379,7 @@ class Options {
                    "Max probability of a T cell binding to an infected cell in one time step")
         ->capture_default_str();
     app.add_flag("--tcells-follow-gradient", tcells_follow_gradient,
-                 "T cells in tissue follow the chemokine gradient")
+                 "T cells in tissue follow the inflammatory signal gradient")
         ->capture_default_str();
     app.add_option("-r,--seed", rnd_seed, "Random seed")->capture_default_str();
     app.add_option("--sample-period", sample_period,
